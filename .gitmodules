@@ -1,0 +1,9 @@
+[submodule "lib_ioshield"]
+	path = lib_ioshield
+	url = https://github.com/charles-park/lib_ioshield
+[submodule "lib_socket"]
+	path = lib_socket
+	url = https://github.com/charles-park/lib_socket
+[submodule "lib_usblp"]
+	path = lib_usblp
+	url = https://github.com/charles-park/lib_usblp
