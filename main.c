@@ -103,6 +103,12 @@ static void time_display (int toffset)
 }
 
 //------------------------------------------------------------------------------
+static void usblp_init_msg (void)
+{
+    ioshield_lcd_printf (0, 0, "%s", " USB LP-SERVER  ");
+    ioshield_lcd_printf (0, 1, "%s", "  Initialize... ");
+}
+
 //------------------------------------------------------------------------------
 static int nlp_port_id = 0;
 
@@ -113,6 +119,7 @@ static int bt_callback (int bt_state)
             printf ("%s : bt state = %d, %s\n", __func__, bt_state, "eBT1_PRESS");
             break;
         case eBT1_LONG_PRESS:
+            usblp_init_msg ();
             usblp_config ();
             printf ("%s : bt state = %d, %s\n", __func__, bt_state, "eBT1_LONG_PRESS");
             break;
@@ -126,6 +133,7 @@ static int bt_callback (int bt_state)
             printf ("%s : bt state = %d, %s\n", __func__, bt_state, "eBT2_PRESS");
             break;
         case eBT2_LONG_PRESS:
+            usblp_init_msg ();
             usblp_config ();
             printf ("%s : bt state = %d, %s\n", __func__, bt_state, "eBT2_LONG_PRESS");
             break;
@@ -296,9 +304,7 @@ int main (int argc, char **argv)
     /* D1 ~ D7(1 ~ 7) */
     ioshield_led_byte (1 << nlp_port_id);
 
-    ioshield_lcd_printf (0, 0, "%s", " USB LP-SERVER  ");
-    ioshield_lcd_printf (0, 1, "%s", "  Initialize... ");
-
+    usblp_init_msg ();
     usblp_config();
 
     socket_server_init (eBOARD_P_C4, socket_callback);
