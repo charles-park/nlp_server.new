@@ -111,6 +111,7 @@ static void usblp_init_msg (void)
 
 //------------------------------------------------------------------------------
 static int nlp_port_id = 0;
+static int usblp_init = 0;
 
 static int bt_callback (int bt_state)
 {
@@ -119,8 +120,8 @@ static int bt_callback (int bt_state)
             printf ("%s : bt state = %d, %s\n", __func__, bt_state, "eBT1_PRESS");
             break;
         case eBT1_LONG_PRESS:
-            usblp_init_msg ();
-            usblp_config ();
+            usblp_init = 1;
+            usblp_init = usblp_config () ? 0 : 1;
             printf ("%s : bt state = %d, %s\n", __func__, bt_state, "eBT1_LONG_PRESS");
             break;
         case eBT1_RELEASE:
@@ -133,8 +134,8 @@ static int bt_callback (int bt_state)
             printf ("%s : bt state = %d, %s\n", __func__, bt_state, "eBT2_PRESS");
             break;
         case eBT2_LONG_PRESS:
-            usblp_init_msg ();
-            usblp_config ();
+            usblp_init = 1;
+            usblp_init = usblp_config () ? 0 : 1;
             printf ("%s : bt state = %d, %s\n", __func__, bt_state, "eBT2_LONG_PRESS");
             break;
         case eBT2_RELEASE:
@@ -281,14 +282,16 @@ void *thread_func_nlp_server(void *arg)
     struct nlp_socket_info *s_info;
 
     while (1) {
-        if (onoff) {
-            get_board_ip (board_ip_str);
-            ioshield_lcd_clear  (-1);
-            ioshield_lcd_printf (0, 0, "%s", board_ip_str);
-            s_info = get_server_port();
-            ioshield_lcd_printf (0, 1, "%s(%d)", s_info->name, s_info->port);
-        } else time_display (9);
-
+        if (usblp_init) usblp_init_msg ();
+        else {
+            if (onoff) {
+                get_board_ip (board_ip_str);
+                ioshield_lcd_clear  (-1);
+                ioshield_lcd_printf (0, 0, "%s", board_ip_str);
+                s_info = get_server_port();
+                ioshield_lcd_printf (0, 1, "%s(%d)", s_info->name, s_info->port);
+            } else time_display (9);
+        }
         onoff = !onoff;
         sleep (2);
     }
