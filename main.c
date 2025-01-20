@@ -260,7 +260,7 @@ static int socket_callback (int c_fd, char *msg, int r_size)
     if (strstr (msg, "left-e")  != NULL)    return print_err (msg, 0);
     if (strstr (msg, "right-e") != NULL)    return print_err (msg, 1);
 
-    if (strstr (msg, "iperf3")   != NULL) {
+    if (strstr (msg, "iperf")   != NULL) {
         if ((!ThreadIperf3) && (strstr (msg, "start") != NULL))
             pthread_create (&thread_iperf3, NULL, thread_iperf3_func, NULL);
 
