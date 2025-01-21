@@ -23,8 +23,8 @@ WorkingDirectory=/root/nlp_server.new
 ExecStartPre=/bin/sleep 10
 ExecStart=/root/nlp_server.new/service/nlp-service.sh
 
-# on-success의 경우 (Kill -2) 옵션으로 종료시 재시작 합니다.
-# on-failure의 경우 (kill -9) 옵션으로 종료시 재시작 합니다.
+# on-success의 경우 exit(0), (Kill -2, -15) 옵션으로 종료시 재시작 합니다.
+# on-failure의 경우 exit(1), (kill -9) 옵션으로 종료시 재시작 합니다.
 # always 항상 재시작 합니다.
 Restart=on-success
 

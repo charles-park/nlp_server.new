@@ -103,50 +103,82 @@ static void time_display (int toffset)
 }
 
 //------------------------------------------------------------------------------
-static void usblp_init_msg (void)
+static void usblp_status_display (void)
 {
-    ioshield_lcd_printf (0, 0, "%s", " USB LP-SERVER  ");
-    ioshield_lcd_printf (0, 1, "%s", "  Initialize... ");
+    char board_ip_str [sizeof(struct sockaddr)+1];
+    struct nlp_socket_info *s_info;
+
+    get_board_ip (board_ip_str);
+    ioshield_lcd_clear  (-1);
+    ioshield_lcd_printf (0, 0, "%s", board_ip_str);
+    s_info = get_server_port();
+    ioshield_lcd_printf (0, 1, "%s(%d)", s_info->name, s_info->port);
+    ioshield_led_byte (1 << s_info->id);
 }
 
 //------------------------------------------------------------------------------
-static int nlp_port_id = 0;
-static int usblp_init = 0;
+static void default_config_write (const char *fname);
+const char *nlp_cfg_file = "/media/boot/nlp_port.cfg";
+static int nlp_port_config = 0;
 
 static int bt_callback (int bt_state)
 {
+    static int nlp_port_id = 0;
+    struct nlp_socket_info *s_info;
+
     switch (bt_state) {
         case eBT1_PRESS:
             printf ("%s : bt state = %d, %s\n", __func__, bt_state, "eBT1_PRESS");
             break;
         case eBT1_LONG_PRESS:
-            usblp_init = 1;
-            usblp_init = usblp_config () ? 0 : 1;
             printf ("%s : bt state = %d, %s\n", __func__, bt_state, "eBT1_LONG_PRESS");
+            nlp_port_config = 1;
+            {
+                s_info = get_server_port ();
+                nlp_port_id = s_info->id;
+            }
             break;
         case eBT1_RELEASE:
             printf ("%s : bt state = %d, %s\n", __func__, bt_state, "eBT1_RELEASE");
-            nlp_port_id ++;
-            if (!set_server_port (nlp_port_id)) nlp_port_id = 0;
-            ioshield_led_byte (1 << nlp_port_id);
+            if (nlp_port_config) {
+                nlp_port_id ++;
+                if (!set_server_port (nlp_port_id)) nlp_port_id = 0;
+            }
             break;
         case eBT2_PRESS:
             printf ("%s : bt state = %d, %s\n", __func__, bt_state, "eBT2_PRESS");
             break;
         case eBT2_LONG_PRESS:
-            usblp_init = 1;
-            usblp_init = usblp_config () ? 0 : 1;
             printf ("%s : bt state = %d, %s\n", __func__, bt_state, "eBT2_LONG_PRESS");
+            // app restart
+            if (nlp_port_config) {
+                // /media/boot/nlp_config.txt update
+                ioshield_lcd_clear  (-1);
+                ioshield_lcd_printf (0, 0, "%s", "NLP PORT UPDATE");
+                default_config_write (nlp_cfg_file);
+
+                ioshield_lcd_printf (0, 1, "%s", "SYSTEM RESTART!");
+                sleep (1);
+                exit(0);
+            }
             break;
         case eBT2_RELEASE:
+            if (nlp_port_config) {
+                if (nlp_port_id)    nlp_port_id --;
+                if (!set_server_port (nlp_port_id)) nlp_port_id = 0;
+            }
             printf ("%s : bt state = %d, %s\n", __func__, bt_state, "eBT2_RELEASE");
-            nlp_port_id --;
-            if (!set_server_port (nlp_port_id)) nlp_port_id = 0;
-            ioshield_led_byte (1 << nlp_port_id);
             break;
         default :
             printf ("%s : bt state = %d, %s\n", __func__, bt_state, "Unknown");
             return 0;
+    }
+    if (nlp_port_config) {
+        s_info = get_server_port ();
+        ioshield_lcd_clear  (-1);
+        ioshield_lcd_printf (0, 0, "%s", "NLP PORT CONFIG");
+        ioshield_lcd_printf (0, 1, "%s(%d)", s_info->name, s_info->port);
+        ioshield_led_byte (1 << s_info->id);
     }
     return 1;
 }
@@ -252,13 +284,13 @@ static int socket_callback (int c_fd, char *msg, int r_size)
         return 0;
     }
 
-    if (strstr (msg, "mac")     != NULL)    return print_mac (msg, 0);
-    if (strstr (msg, "left-m")  != NULL)    return print_mac (msg, 0);
-    if (strstr (msg, "right-m") != NULL)    return print_mac (msg, 1);
+    if (strstr (msg, "mac")     != NULL)    print_mac (msg, 0);
+    if (strstr (msg, "left-m")  != NULL)    print_mac (msg, 0);
+    if (strstr (msg, "right-m") != NULL)    print_mac (msg, 1);
 
-    if (strstr (msg, "error")   != NULL)    return print_err (msg, 0);
-    if (strstr (msg, "left-e")  != NULL)    return print_err (msg, 0);
-    if (strstr (msg, "right-e") != NULL)    return print_err (msg, 1);
+    if (strstr (msg, "error")   != NULL)    print_err (msg, 0);
+    if (strstr (msg, "left-e")  != NULL)    print_err (msg, 0);
+    if (strstr (msg, "right-e") != NULL)    print_err (msg, 1);
 
     if (strstr (msg, "iperf")   != NULL) {
         if ((!ThreadIperf3) && (strstr (msg, "start") != NULL))
@@ -267,10 +299,10 @@ static int socket_callback (int c_fd, char *msg, int r_size)
         if (( ThreadIperf3) && (strstr (msg, "stop")  != NULL))
             thread_iperf3_stop ();
     }
-    if (strstr (msg, "version") != NULL)    {
+    if (strstr (msg, "version") != NULL)
         send (c_fd, resp_version, strlen(resp_version), 0);
-    }
-    return 1;
+
+    return 0;
 }
 
 //------------------------------------------------------------------------------
@@ -278,39 +310,97 @@ pthread_t thread_nlp_server;
 
 void *thread_func_nlp_server(void *arg)
 {
-    char board_ip_str [sizeof(struct sockaddr)+1], onoff = 0;
-    struct nlp_socket_info *s_info;
+    char onoff = 0;
 
     while (1) {
-        if (usblp_init) usblp_init_msg ();
-        else {
-            if (onoff) {
-                get_board_ip (board_ip_str);
-                ioshield_lcd_clear  (-1);
-                ioshield_lcd_printf (0, 0, "%s", board_ip_str);
-                s_info = get_server_port();
-                ioshield_lcd_printf (0, 1, "%s(%d)", s_info->name, s_info->port);
-            } else time_display (9);
+        if (!nlp_port_config) {
+            if (onoff)  usblp_status_display ();
+            else        time_display (9);
+            onoff = !onoff;
         }
-        onoff = !onoff;
         sleep (2);
     }
     return arg;
 }
 
 //------------------------------------------------------------------------------
-int main (int argc, char **argv)
+static void default_config_write (const char *fname)
+{
+    FILE *fp;
+    char value [1024];
+    struct nlp_socket_info *s_info;
+
+    if ((fp = fopen(fname, "wt")) == NULL)
+        return;
+
+    // default value write
+    fputs   ("# info : id, port, name \n", fp);
+    memset  (value, 0, sizeof(value));
+
+    s_info = get_server_port ();
+    sprintf (value, "%d,%d,%s,\n", s_info->id, s_info->port, s_info->name);
+    fputs   (value, fp);
+    fclose  (fp);
+}
+
+//------------------------------------------------------------------------------
+static void default_config_read (void)
+{
+    FILE *fp;
+    char value [1024], *ptr;
+
+    if (access (nlp_cfg_file, R_OK) != 0) {
+        // default value (8888)
+        socket_server_init (eBOARD_P_C4, socket_callback);
+
+        default_config_write (nlp_cfg_file);
+        return;
+    }
+
+    if ((fp = fopen(nlp_cfg_file, "r")) == NULL)
+        return;
+
+    while(1) {
+        memset (value , 0, sizeof(value));
+        if (fgets (value, sizeof (value), fp) == NULL)
+            break;
+
+        switch (value[0]) {
+            case '#':   case '\n':
+                break;
+            default :
+                // id, port, name
+                {
+                    struct nlp_socket_info *s_info;
+
+                    if ((ptr = strtok (value, ",")) != NULL) {
+                        socket_server_init (atoi(ptr), socket_callback);;
+                        s_info = get_server_port ();
+                        printf ("%s : id = %d, port = %d, name = %s\n",
+                                __func__, s_info->id, s_info->port, s_info->name);
+                    }
+                }
+                break;
+        }
+    }
+    fclose(fp);
+}
+
+//------------------------------------------------------------------------------
+int main (void)
 {
     ioshield_init (bt_callback);
 
     ioshield_lcd_clear (-1);
     /* D1 ~ D7(1 ~ 7) */
-    ioshield_led_byte (1 << nlp_port_id);
+    ioshield_led_byte (0);
 
-    usblp_init_msg ();
+    ioshield_lcd_printf (0, 0, "%s", " USB LP-SERVER  ");
+    ioshield_lcd_printf (0, 1, "%s", "  Initialize... ");
     usblp_config();
 
-    socket_server_init (eBOARD_P_C4, socket_callback);
+    // /media/nlp_config.txt read
+    default_config_read ();
 
     pthread_create (&thread_nlp_server, NULL, thread_func_nlp_server, NULL);
 
