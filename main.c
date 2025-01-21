@@ -150,16 +150,22 @@ static int bt_callback (int bt_state)
             break;
         case eBT2_LONG_PRESS:
             printf ("%s : bt state = %d, %s\n", __func__, bt_state, "eBT2_LONG_PRESS");
+            ioshield_lcd_clear  (-1);
             // app restart
             if (nlp_port_config) {
                 // /media/boot/nlp_config.txt update
-                ioshield_lcd_clear  (-1);
                 ioshield_lcd_printf (0, 0, "%s", "NLP PORT UPDATE");
                 default_config_write (nlp_cfg_file);
 
                 ioshield_lcd_printf (0, 1, "%s", "SYSTEM RESTART!");
                 sleep (1);
                 exit(0);
+            } else {
+                nlp_port_config = 1;
+                ioshield_lcd_printf (0, 0, "%s", " USB Label Print");
+                ioshield_lcd_printf (0, 1, "%s", "  Initialize... ");
+                usblp_config();
+                nlp_port_config = 0;
             }
             break;
         case eBT2_RELEASE:
